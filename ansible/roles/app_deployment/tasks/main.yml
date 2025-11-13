@@ -1,0 +1,90 @@
+---
+# Application deployment tasks
+
+- name: Create application directory
+  file:
+    path: /opt/app
+    state: directory
+    mode: '0755'
+
+- name: Install Python dependencies
+  pip:
+    name:
+      - flask
+      - gunicorn
+      - psycopg2-binary
+      - pymysql
+    state: present
+
+- name: Create sample Flask application
+  copy:
+    dest: /opt/app/app.py
+    content: |
+      #!/usr/bin/env python3
+      """
+      Sample Flask Application
+      """
+      from flask import Flask, jsonify
+      import os
+      import socket
+
+      app = Flask(__name__)
+
+      @app.route('/')
+      def health():
+          return jsonify({
+              'status': 'healthy',
+              'hostname': socket.gethostname(),
+              'environment': os.getenv('ENVIRONMENT', 'unknown')
+          })
+
+      @app.route('/api/status')
+      def status():
+          return jsonify({
+              'service': 'one-click-multicloud-provisioner',
+              'version': '1.0.0',
+              'status': 'running'
+          })
+
+      if __name__ == '__main__':
+          app.run(host='0.0.0.0', port=5000)
+    mode: '0755'
+
+- name: Create systemd service file
+  copy:
+    dest: /etc/systemd/system/app.service
+    content: |
+      [Unit]
+      Description=Sample Flask Application
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=root
+      WorkingDirectory=/opt/app
+      Environment="ENVIRONMENT={{ environment }}"
+      ExecStart=/usr/bin/python3 /opt/app/app.py
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start application service
+  systemd:
+    name: app
+    enabled: yes
+    state: started
+
+- name: Configure firewall for application
+  ufw:
+    rule: allow
+    port: "5000"
+    proto: tcp
+  when: ansible_os_family == "Debian"
+

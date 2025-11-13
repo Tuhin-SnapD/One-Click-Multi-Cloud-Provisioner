@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  author: one-click-multicloud-provisioner
+  description: Application deployment role
+  license: MIT
+  min_ansible_version: "2.9"
+
+dependencies: []
+

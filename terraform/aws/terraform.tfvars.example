@@ -1,0 +1,25 @@
+# Example Terraform variables for AWS
+# Copy this file to terraform.tfvars and update with your values
+
+environment = "dev"
+aws_region  = "us-east-1"
+
+# VPC Configuration
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
+
+# Instance Configuration
+instance_count = 1
+instance_type  = "t3.medium"
+
+# SSH Key (optional)
+# key_pair_name = "my-key-pair"
+
+# Database Configuration
+enable_db        = false
+db_instance_class = "db.t3.micro"
+db_name          = "appdb"
+db_username      = "admin"
+# db_password      = "ChangeMe123!"  # Set via environment variable or secrets manager
+

@@ -1,0 +1,171 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      cloud:
+        description: 'Cloud provider'
+        required: true
+        type: choice
+        options:
+          - aws
+          - gcp
+      environment:
+        description: 'Environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pylint flake8
+      
+      - name: Lint Python files
+        run: |
+          flake8 scripts/ modules/ --max-line-length=120 --ignore=E501 || true
+          pylint scripts/ modules/ --disable=all --enable=E,F || true
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+      
+      - name: Terraform Format Check
+        run: |
+          terraform fmt -check -recursive terraform/ || true
+
+  terraform-validate:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cloud: [aws, gcp]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+      
+      - name: Terraform Init
+        working-directory: terraform/${{ matrix.cloud }}
+        run: terraform init -backend=false
+      
+      - name: Terraform Validate
+        working-directory: terraform/${{ matrix.cloud }}
+        run: terraform validate
+
+  ansible-syntax:
+    name: Ansible Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install Ansible
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible ansible-core
+      
+      - name: Ansible Syntax Check
+        run: |
+          ansible-playbook ansible/playbooks/deploy.yml --syntax-check
+
+  test-scripts:
+    name: Test Python Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Test provision script
+        run: |
+          python scripts/provision.py --help
+      
+      - name: Test drift detector
+        run: |
+          python scripts/drift_detector.py --help
+
+  provision:
+    name: Provision Infrastructure
+    runs-on: ubuntu-latest
+    needs: [lint, terraform-validate, ansible-syntax]
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+      
+      - name: Configure AWS credentials
+        if: github.event.inputs.cloud == 'aws'
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Configure GCP credentials
+        if: github.event.inputs.cloud == 'gcp'
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Provision Infrastructure
+        run: |
+          python scripts/provision.py \
+            --cloud ${{ github.event.inputs.cloud }} \
+            --env ${{ github.event.inputs.environment }}
+

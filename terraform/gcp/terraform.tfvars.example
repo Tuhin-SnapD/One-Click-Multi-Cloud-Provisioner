@@ -1,0 +1,28 @@
+# Example Terraform variables for GCP
+# Copy this file to terraform.tfvars and update with your values
+
+environment    = "dev"
+gcp_project_id = "your-project-id"
+gcp_region     = "us-east1"
+gcp_zone       = "us-east1-b"
+
+# VPC Configuration
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
+
+# Instance Configuration
+instance_count = 1
+instance_type  = "n1-standard-1"
+
+# SSH Configuration (optional)
+# ssh_user      = "ubuntu"
+# ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."
+
+# Database Configuration
+enable_db      = false
+db_instance_tier = "db-f1-micro"
+db_name        = "appdb"
+db_username    = "admin"
+# db_password    = "ChangeMe123!"  # Set via environment variable or secrets manager
+

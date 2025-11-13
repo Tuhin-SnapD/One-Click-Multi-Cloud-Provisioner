@@ -1,0 +1,32 @@
+---
+# Main deployment playbook
+# Deploys application and monitoring stack
+
+- name: Deploy Application and Monitoring Stack
+  hosts: all
+  become: yes
+  vars:
+    prometheus_version: "2.45.0"
+    node_exporter_version: "1.6.1"
+    prometheus_port: 9090
+    node_exporter_port: 9100
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+  roles:
+    - app_deployment
+    - monitoring
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "✅ Deployment completed successfully!"
+          - "Prometheus: http://{{ ansible_default_ipv4.address }}:{{ prometheus_port }}"
+          - "Node Exporter: http://{{ ansible_default_ipv4.address }}:{{ node_exporter_port }}"
+
