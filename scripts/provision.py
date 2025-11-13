@@ -9,8 +9,16 @@ import sys
 import subprocess
 import argparse
 import json
+import platform
 from pathlib import Path
 from typing import Optional
+
+# Fix Windows encoding issues
+if platform.system() == "Windows":
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8')
+    if sys.stderr.encoding != 'utf-8':
+        sys.stderr.reconfigure(encoding='utf-8')
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -47,9 +55,41 @@ class Provisioner:
         """Check if required tools are installed"""
         required_tools = {
             "terraform": "terraform version",
-            "ansible": "ansible --version",
             "python": "python --version"
         }
+        
+        # Check Ansible - try ansible first, then ansible-playbook as fallback
+        # On Windows, use where.exe to check if command exists
+        ansible_available = False
+        if platform.system() == "Windows":
+            try:
+                result = subprocess.run(["where.exe", "ansible"], 
+                                     capture_output=True, 
+                                     check=False)
+                if result.returncode == 0:
+                    ansible_available = True
+                else:
+                    # Try ansible-playbook
+                    result = subprocess.run(["where.exe", "ansible-playbook"], 
+                                         capture_output=True, 
+                                         check=False)
+                    ansible_available = (result.returncode == 0)
+            except FileNotFoundError:
+                pass
+        else:
+            try:
+                subprocess.run(["ansible", "--version"], 
+                             capture_output=True, 
+                             check=True)
+                ansible_available = True
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                try:
+                    subprocess.run(["ansible-playbook", "--version"], 
+                                 capture_output=True, 
+                                 check=True)
+                    ansible_available = True
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    pass
         
         missing_tools = []
         for tool, check_cmd in required_tools.items():
@@ -59,6 +99,9 @@ class Provisioner:
                              check=True)
             except (subprocess.CalledProcessError, FileNotFoundError):
                 missing_tools.append(tool)
+        
+        if not ansible_available:
+            missing_tools.append("ansible")
         
         if missing_tools:
             print(f"❌ Missing required tools: {', '.join(missing_tools)}")
